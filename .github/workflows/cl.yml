@@ -1,4 +1,4 @@
-name: Sub Checker Creator
+name: Sub Checker Arista
 
 on:
   workflow_dispatch:
