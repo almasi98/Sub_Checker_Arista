@@ -36,7 +36,7 @@ FILE_HEADER_TEXT = "//profile-title: base64:2YfZhduM2LTZhyDZgdi52KfZhCDwn5iO8J+Y
 # ==============================================================================
 FIN_CONF=[]
 CHECK_LOC=True
-CHECK_IRAN=True
+CHECK_IRAN=False
 CHECK_HOST_IRANIAN_NODES = [
     "ir1.node.check-host.net",  # Tehran, AS44244 Mobile Communication Company of Iran (MCI)
     "ir2.node.check-host.net",  # Tehran, AS12880 Telecommunication Infrastructure Company (TIC زیرساخت)
@@ -2106,6 +2106,7 @@ if __name__ == "__main__":
     process_manager.stop_all()
     print("All tasks finished successfully.")
     sys.exit()
+
 
 
 
