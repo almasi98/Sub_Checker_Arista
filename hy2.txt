@@ -1,5 +1,7 @@
 //profile-title: base64:2YfZhduM2LTZhyDZgdi52KfZhCDwn5iO8J+YjvCfmI4gaGFtZWRwNzE=
-hysteria2://dongtaiwang.com@108.181.5.130:63015?security=tls&insecure=1&sni=apple.com#hamedp71%3A%3A%F0%9F%87%BA%F0%9F%87%B8
-hysteria2://dongtaiwang.com@208.87.243.187:22222?security=tls&insecure=1&sni=www.bing.com#hamedp71%3A%3A%F0%9F%87%BA%F0%9F%87%B8
-hy2://80747420-96c4-4a2f-83e6-eea4e46beb09@drhystuichdfy.samanidempire.org:20335/?obfs=salamander&obfs-password=U1wBrYQyFm&sni=drhystuichdfy.samanidempire.org&alpn=h3#hamedp71%3A%3A%F0%9F%87%B8%F0%9F%87%AA
-hysteria2://f599eb06-508a-4e24-9d59-4c50bf0332b9@91.98.79.239:29111?sni=plaza.ir&obfs=salamander&obfs-password=zVwQtP96XEO8ylpQ&insecure=1&allowInsecure=1#hamedp71%3A%3A%E2%9D%93
+hy2://37afff84-34bd-4db6-b24a-7d73d2ed48ce@107.173.127.166:25000?insecure=1&sni=www.apple.com#hamedp71%3A%3A%F0%9F%87%BA%F0%9F%87%B8
+hy2://37afff84-34bd-4db6-b24a-7d73d2ed48ce@198.23.130.211:25000?insecure=1&sni=api.push.apple.com#hamedp71%3A%3A%E2%9D%93
+hy2://ae845cbd-08fb-4346-929a-e28a6f3960a8@hk1.shiyuandian.shop:24591?insecure=1&sni=hk1.shiyuandian.shop#hamedp71%3A%3A%F0%9F%87%AD%F0%9F%87%B0
+hy2://Yet-Another-Public-Config-1@yapc-1.adamhayward.co.uk:36400?obfs=salamander&obfs-password=Yet-Another-Public-Config-1&sni=YAPC-1.afshin.ir#hamedp71%3A%3A%E2%9D%93
+hy2://Yet-Another-Public-Config-1@yapc-1.adamhayward.co.uk:36300?obfs=salamander&obfs-password=Yet-Another-Public-Config-1&sni=YAPC-1.afshin.ir#hamedp71%3A%3A%E2%9D%93
+hy2://Yet-Another-Public-Config-1@yapc-1.adamhayward.co.uk:35200?obfs=salamander&obfs-password=Yet-Another-Public-Config-1&sni=YAPC-1.afshin.ir#hamedp71%3A%3A%E2%9D%93
