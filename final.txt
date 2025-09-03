@@ -1,8 +1,9 @@
 //profile-title: base64:2YfZhduM2LTZhyDZgdi52KfZhCDwn5iO8J+YjvCfmI4gaGFtZWRwNzE=
 ss://YWVzLTI1Ni1nY206WEtGS2wyclVMaklwNzQ=@38.110.1.17:8009#hamedp71%3A%3A%F0%9F%87%BA%F0%9F%87%B8
+vless://65b3cbba-e6ac-485a-9481-976a0415eab9@172.67.218.90:80?security=&type=ws&path=/Fvy0Y7NJ7uucUDha?ed%3D2560&host=bLue-sNoW-a243.GeleNE5962.wOrKeRS.dEV&encryption=none#hamedp71%3A%3A%F0%9F%87%BA%F0%9F%87%B8
 hy2://37afff84-34bd-4db6-b24a-7d73d2ed48ce@107.173.127.166:25000?insecure=1&sni=www.apple.com#hamedp71%3A%3A%F0%9F%87%BA%F0%9F%87%B8
-hy2://37afff84-34bd-4db6-b24a-7d73d2ed48ce@198.23.130.211:25000?insecure=1&sni=api.push.apple.com#hamedp71%3A%3A%E2%9D%93
-hy2://Yet-Another-Public-Config-1@yapc-1.adamhayward.co.uk:35200?obfs=salamander&obfs-password=Yet-Another-Public-Config-1&sni=YAPC-1.afshin.ir#hamedp71%3A%3A%E2%9D%93
-hy2://Yet-Another-Public-Config-1@yapc-1.adamhayward.co.uk:36400?obfs=salamander&obfs-password=Yet-Another-Public-Config-1&sni=YAPC-1.afshin.ir#hamedp71%3A%3A%E2%9D%93
-hy2://Yet-Another-Public-Config-1@yapc-1.adamhayward.co.uk:36300?obfs=salamander&obfs-password=Yet-Another-Public-Config-1&sni=YAPC-1.afshin.ir#hamedp71%3A%3A%E2%9D%93
+hy2://37afff84-34bd-4db6-b24a-7d73d2ed48ce@198.23.130.211:25000?insecure=1&sni=api.push.apple.com#hamedp71%3A%3A%F0%9F%87%BA%F0%9F%87%B8
+hy2://Yet-Another-Public-Config-1@yapc-1.adamhayward.co.uk:35200?obfs=salamander&obfs-password=Yet-Another-Public-Config-1&sni=YAPC-1.afshin.ir#hamedp71%3A%3A%F0%9F%87%B3%F0%9F%87%B1
+hy2://Yet-Another-Public-Config-1@yapc-1.adamhayward.co.uk:36400?obfs=salamander&obfs-password=Yet-Another-Public-Config-1&sni=YAPC-1.afshin.ir#hamedp71%3A%3A%F0%9F%87%B3%F0%9F%87%B1
+hy2://Yet-Another-Public-Config-1@yapc-1.adamhayward.co.uk:36300?obfs=salamander&obfs-password=Yet-Another-Public-Config-1&sni=YAPC-1.afshin.ir#hamedp71%3A%3A%F0%9F%87%B3%F0%9F%87%B1
 hy2://ae845cbd-08fb-4346-929a-e28a6f3960a8@hk1.shiyuandian.shop:24591?insecure=1&sni=hk1.shiyuandian.shop#hamedp71%3A%3A%F0%9F%87%AD%F0%9F%87%B0
