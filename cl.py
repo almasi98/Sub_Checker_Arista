@@ -27,11 +27,11 @@ with open(CONF_PATH,"r") as file_client_set:
         f=json.load(file_client_set)
         test_link_=f["core"]["test_url"]
 TEXT_PATH="normal.txt"
-LINK_PATH=["https://raw.githubusercontent.com/tepo18/omax98/main/tepo10.txt",
-    "https://raw.githubusercontent.com/tepo18/omax98/main/tepo20.txt",
-    "https://raw.githubusercontent.com/tepo18/omax98/main/tepo30.txt",
-    "https://raw.githubusercontent.com/tepo18/omax98/main/tepo40.txt",
-    "https://raw.githubusercontent.com/tepo18/omax98/main/tepo50.txt", ] # [ "" , "" , ... ]
+LINK_PATH=["https://raw.githubusercontent.com/almasi98/omax98/main/tepo10.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo20.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo30.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo40.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo50.txt", ] # [ "" , "" , ... ]
 FIN_PATH="final.txt"
 # ==============================================================================
 # <<<<<<<<<<<<<<<< این خط را اضافه کنید >>>>>>>>>>>>>>>>
@@ -2110,6 +2110,7 @@ if __name__ == "__main__":
     process_manager.stop_all()
     print("All tasks finished successfully.")
     sys.exit()
+
 
 
 
