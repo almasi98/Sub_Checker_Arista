@@ -27,7 +27,11 @@ with open(CONF_PATH,"r") as file_client_set:
         f=json.load(file_client_set)
         test_link_=f["core"]["test_url"]
 TEXT_PATH="normal.txt"
-LINK_PATH=[ "https://raw.githubusercontent.com/hamedp-71/NEW/refs/heads/main/hp.txt" ] # [ "" , "" , ... ]
+LINK_PATH=["https://raw.githubusercontent.com/tepo18/sab-vip10/main/tepo60.txt",
+    "https://raw.githubusercontent.com/tepo18/sab-vip10/main/tepo70.txt",
+    "https://raw.githubusercontent.com/tepo18/sab-vip10/main/tepo80.txt",
+    "https://raw.githubusercontent.com/tepo18/sab-vip10/main/tepo90.txt",
+    "https://raw.githubusercontent.com/tepo18/sab-vip10/main/tepo100.txt", ] # [ "" , "" , ... ]
 FIN_PATH="final.txt"
 # ==============================================================================
 # <<<<<<<<<<<<<<<< این خط را اضافه کنید >>>>>>>>>>>>>>>>
@@ -2089,7 +2093,7 @@ if __name__ == "__main__":
     print(f"Found {len(cleaned_configs)} unique configs after cleaning.")
 
     # مرحله ۳: تنظیم تگ اولیه
-    tagged_configs = set_initial_tag(cleaned_configs, "hamedp71")
+    tagged_configs = set_initial_tag(cleaned_configs, "almasi98")
 
     # مرحله ۴: نوشتن کانفیگ‌های آماده در فایل ورودی برای تستر
     print(f"Writing {len(tagged_configs)} prepared configs to '{TEXT_PATH}' for testing...")
@@ -2106,6 +2110,7 @@ if __name__ == "__main__":
     process_manager.stop_all()
     print("All tasks finished successfully.")
     sys.exit()
+
 
 
 
