@@ -1,0 +1,215 @@
+# ==============================================================================
+# بخش جدید برای پیش‌پردازش، تست و ذخیره‌سازی فایل‌ها
+# ==============================================================================
+import base64
+import json
+import re
+import os
+import urllib.parse
+
+def set_initial_tag(configs_list: list, new_tag: str) -> list:
+    """
+    تگ اولیه تمام کانفیگ‌ها را به مقدار مشخص شده تغییر می‌دهد.
+    این تابع به صورت ویژه کانفیگ‌های vmess را با رعایت پدینگ مدیریت می‌کند.
+    """
+    modified_configs = []
+    print(f"در حال تنظیم تگ اولیه '{new_tag}' برای تمام کانفیگ‌ها...")
+    
+    for config in configs_list:
+        config = config.strip()
+        if not config:
+            continue
+
+        if config.startswith("vmess://"):
+            try:
+                encoded_part = config.split("://", 1)[1].split("#", 1)[0]
+                missing_padding = len(encoded_part) % 4
+                if missing_padding:
+                    encoded_part += '=' * (4 - missing_padding)
+                
+                decoded_json_str = base64.b64decode(encoded_part).decode('utf-8')
+                vmess_data = json.loads(decoded_json_str)
+                vmess_data['ps'] = new_tag
+                
+                updated_json_str = json.dumps(vmess_data, separators=(',', ':'), ensure_ascii=False)
+                updated_base64_str = base64.b64encode(updated_json_str.encode('utf-8')).decode('utf-8').rstrip("=")
+                
+                modified_configs.append(f"vmess://{updated_base64_str}")
+            except Exception as e:
+                print(f"خطا در پردازش کانفیگ vmess: {config[:30]}... ({e}). کانفیگ بدون تغییر باقی ماند.")
+                modified_configs.append(config)
+        else:
+            base_config = config.split('#', 1)[0]
+            encoded_tag = urllib.parse.quote(new_tag)
+            modified_configs.append(f"{base_config}#{encoded_tag}")
+            
+    print("تنظیم تگ اولیه با موفقیت انجام شد.")
+    return modified_configs
+
+def country_code_to_emoji(code: str) -> str:
+    """کد دو حرفی کشور را به ایموجی پرچم تبدیل می‌کند."""
+    if not isinstance(code, str) or len(code) != 2:
+        return "❓"
+    code = code.upper()
+    if code == "XX":
+        return "❓"
+    return "".join(chr(ord(c) + 127397) for c in code)
+
+# ==============================================================================
+# تابع save_sorted_configs (نسخه نهایی، اصلاح‌شده و ضد خطا)
+# ==============================================================================
+def save_sorted_configs(configs: list):
+    """
+    کانفیگ‌ها را بر اساس پروتکل و موقعیت (ایموجی) تفکیک کرده و ذخیره می‌کند.
+    این نسخه برای حداکثر پایداری و عیب‌یابی بازنویسی شده است.
+    """
+    if not configs:
+        print("عیب‌یابی: لیست کانفیگ نهایی (FIN_CONF) خالی است. هیچ فایلی ذخیره نمی‌شود.")
+        # ایجاد فایل‌های خالی برای جلوگیری از خطای کامیت
+        open("final.txt", 'w').close()
+        open("final_b64.txt", 'w').close()
+        return
+
+    # --- مرحله ۱: عیب‌یابی اولیه ---
+    print("\n" + "="*50)
+    print("شروع مرحله ذخیره‌سازی نهایی...")
+    print(f"تعداد کل کانفیگ‌های موفق برای ذخیره: {len(configs)}")
+    if configs:
+        print(f"نمونه اولین کانفیگ در لیست نهایی: '{configs[0]}'")
+    print("="*50 + "\n")
+
+    configs_by_protocol = {}
+    configs_by_country = {}
+
+    # --- مرحله ۲: تفکیک کانفیگ‌ها ---
+    for i, config in enumerate(configs):
+        config = config.strip()
+        if not config:
+            continue
+
+        # --- تفکیک بر اساس پروتکل ---
+        protocol = "unknown"
+        if config.startswith("vless://"): protocol = "vless"
+        elif config.startswith("vmess://"): protocol = "vmess"
+        elif config.startswith("trojan://"): protocol = "trojan"
+        elif config.startswith("ss://"): protocol = "ss"
+        elif config.startswith("hy2://") or config.startswith("hysteria2://"): protocol = "hy2"
+        elif config.startswith("wireguard://"): protocol = "wireguard"
+        elif config.startswith("socks://"): protocol = "socks"
+        
+        configs_by_protocol.setdefault(protocol, []).append(config)
+
+        # --- تفکیک بر اساس ایموجی کشور ---
+        flag_emoji = "❓" # مقدار پیش‌فرض
+        try:
+            tag = ""
+            if config.startswith("vmess://"):
+                encoded_part = config.split("://", 1)[1]
+                missing_padding = len(encoded_part) % 4
+                if missing_padding: encoded_part += '=' * (4 - missing_padding)
+                decoded_json = base64.b64decode(encoded_part).decode('utf-8')
+                tag = json.loads(decoded_json).get('ps', '')
+            else:
+                 tag = urllib.parse.unquote(config.split('#', 1)[1])
+            
+            if '::' in tag:
+                potential_emoji = tag.rsplit('::', 1)[1]
+                if potential_emoji:
+                    flag_emoji = potential_emoji
+        except Exception as e:
+            if i < 5: # فقط برای ۵ خطای اول لاگ می‌اندازیم تا خروجی شلوغ نشود
+                print(f"  [عیب‌یابی] خطایی در استخراج تگ رخ داد: {e} | کانفیگ: {config[:40]}...")
+
+        configs_by_country.setdefault(flag_emoji, []).append(config)
+
+    # --- مرحله ۳: عیب‌یابی نهایی ---
+    print("\n" + "="*50)
+    print("نتیجه تفکیک کانفیگ‌ها:")
+    print(f"پروتکل‌های یافت‌شده: {list(configs_by_protocol.keys())}")
+    for proto, conf_list in configs_by_protocol.items():
+        print(f"  - {proto}: {len(conf_list)} کانفیگ")
+    print(f"کشورهای (ایموجی) یافت‌شده: {list(configs_by_country.keys())}")
+    for flag, conf_list in configs_by_country.items():
+        print(f"  - {flag}: {len(conf_list)} کانفیگ")
+    print("="*50 + "\n")
+    
+    # --- مرحله ۴: نوشتن فایل‌ها ---
+    def write_to_file(filepath, data_list):
+        if not data_list:
+            print(f"لیست خالی برای '{filepath}'، فایل ساخته نمی‌شود.")
+            return
+        try:
+            full_content_list = [FILE_HEADER_TEXT] + data_list
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write("\n".join(full_content_list))
+            print(f"فایل '{filepath}' با موفقیت با {len(data_list)} کانفیگ ذخیره شد.")
+        except Exception as e:
+            print(f"!!! خطا در نوشتن فایل '{filepath}': {e}")
+
+    # نوشتن فایل‌های اصلی
+    write_to_file(FIN_PATH, configs)
+    write_to_file(f"{FIN_PATH.replace('.txt', '')}_b64.txt", [base64.b64encode(c.encode('utf-8')).decode('utf-8') for c in configs])
+
+    # نوشتن فایل‌های پروتکل‌ها
+    for protocol, proto_configs in configs_by_protocol.items():
+        if protocol != "unknown":
+            write_to_file(f"{protocol}.txt", proto_configs)
+            write_to_file(f"{protocol}_b64.txt", [base64.b64encode(c.encode('utf-8')).decode('utf-8') for c in proto_configs])
+
+    # نوشتن فایل‌های کشورها
+    os.makedirs("loc", exist_ok=True)
+    for flag_emoji, country_configs in configs_by_country.items():
+        filename = os.path.join("loc", f"{flag_emoji}.txt")
+        write_to_file(filename, country_configs)
+# ==============================================================================
+# بخش اصلی اجرای اسکریپت (نسخه اصلاح‌شده برای حل خطای 403)
+# ==============================================================================
+if __name__ == "__main__":
+    all_configs_raw = []
+    if LINK_PATH:
+        print(f"Fetching from {len(LINK_PATH)} link(s)...")
+
+        # ۱. یک هدر برای معرفی اسکریپت به عنوان مرورگر واقعی تعریف می‌کنیم
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36'
+        }
+
+        for link in LINK_PATH:
+            if link.startswith("http"):
+                try:
+                    print(f"Fetching: {link}")
+                    # ۲. هدر تعریف شده را به درخواست اضافه می‌کنیم
+                    response = requests.get(link, timeout=15, headers=headers)
+                    response.raise_for_status()
+                    all_configs_raw.extend(response.text.splitlines())
+                    print(f"Successfully fetched {link}")
+                except requests.RequestException as e:
+                    print(f"!!! Failed to fetch {link}: {e}")
+
+    # مرحله ۲: تمیز کردن و حذف تکراری‌ها
+    cleaned_configs = clear_p(all_configs_raw)
+    print(f"Found {len(cleaned_configs)} unique configs after cleaning.")
+
+    # مرحله ۳: تنظیم تگ اولیه
+    tagged_configs = set_initial_tag(cleaned_configs, "almasi98")
+
+    # مرحله ۴: نوشتن کانفیگ‌های آماده در فایل ورودی برای تستر
+    print(f"Writing {len(tagged_configs)} prepared configs to '{TEXT_PATH}' for testing...")
+    with open(TEXT_PATH, "w", encoding="utf-8") as f:
+        f.write("\n".join(tagged_configs))
+
+    # مرحله ۵: اجرای فرآیند اصلی تست
+    ping_all()
+
+    # مرحله ۶: ذخیره نتایج نهایی به صورت مرتب‌شده
+    save_sorted_configs(FIN_CONF)
+
+    # مرحله ۷: اطمینان از توقف تمام فرآیندها در انتها
+    process_manager.stop_all()
+    print("All tasks finished successfully.")
+    sys.exit()
+
+
+
+
+
