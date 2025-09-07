@@ -1,2 +1,2 @@
 
-https://raw.githubusercontent.com/tepo18/omax98/main/links.md
+https://raw.githubusercontent.com/omax98/omax98/main/links.md
