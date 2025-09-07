@@ -10,11 +10,17 @@ RAW_HEADER = "//profile-title: base64:2YfZhduM2LTZhyDZgdi52KfZhCDwn5iO8J+YjvCfmI
 
 # ---------------- منابع ----------------
 SOURCES = [
-    "https://raw.githubusercontent.com/tepo18/tepo90/main/tepo10.txt",
-    "https://raw.githubusercontent.com/tepo18/tepo90/main/tepo20.txt",
-    "https://raw.githubusercontent.com/tepo18/tepo90/main/tepo30.txt",
-    "https://raw.githubusercontent.com/tepo18/tepo90/main/tepo40.txt",
-    "https://raw.githubusercontent.com/tepo18/tepo90/main/tepo50.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/h2.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/vless.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/ss.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/vmess.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/trojan.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo10.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo20.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo30.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo40.txt",
+    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo50.txt",
+    
 ]
 
 MAX_THREADS = 20
