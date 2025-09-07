@@ -10,10 +10,6 @@ RAW_HEADER = "//profile-title: base64:2YfZhduM2LTZhyDZgdi52KfZhCDwn5iO8J+YjvCfmI
 
 # ---------------- منابع ----------------
 SOURCES = [
-    "https://raw.githubusercontent.com/almasi98/omax98/main/h2.txt",
-    "https://raw.githubusercontent.com/almasi98/omax98/main/vless.txt",
-    "https://raw.githubusercontent.com/almasi98/omax98/main/ss.txt",
-    "https://raw.githubusercontent.com/almasi98/omax98/main/vmess.txt",
     "https://raw.githubusercontent.com/almasi98/omax98/main/trojan.txt",
     "https://raw.githubusercontent.com/almasi98/omax98/main/tepo10.txt",
     "https://raw.githubusercontent.com/almasi98/omax98/main/tepo20.txt",
@@ -23,8 +19,8 @@ SOURCES = [
     
 ]
 
-MAX_THREADS = 20
-PING_THRESHOLD = 1200  # میلی‌ثانیه
+MAX_THREADS = 10
+PING_THRESHOLD = 1500  # میلی‌ثانیه
 
 # ---------------- تابع خواندن منابع ----------------
 def fetch_sources():
