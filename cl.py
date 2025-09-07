@@ -16,7 +16,8 @@ TEXT_NORMAL = "normal.txt"
 TEXT_FINAL = "final.txt"
 
 # ---------------- منابع ----------------
-LINKS_RAW = ["https://raw.githubusercontent.com/almasi98/omax98/main/h2.txt",
+LINKS_RAW = [
+    "https://raw.githubusercontent.com/almasi98/omax98/main/h2.txt",
     "https://raw.githubusercontent.com/almasi98/omax98/main/vless.txt",
     "https://raw.githubusercontent.com/almasi98/omax98/main/ss.txt",
     "https://raw.githubusercontent.com/almasi98/omax98/main/vmess.txt",
