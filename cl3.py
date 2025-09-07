@@ -22,15 +22,11 @@ LINKS_RAW = [
     "https://raw.githubusercontent.com/almasi98/omax98/main/ss.txt",
     "https://raw.githubusercontent.com/almasi98/omax98/main/vmess.txt",
     "https://raw.githubusercontent.com/almasi98/omax98/main/trojan.txt",
-    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo10.txt",
-    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo20.txt",
-    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo30.txt",
-    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo40.txt",
-    "https://raw.githubusercontent.com/almasi98/omax98/main/tepo50.txt",
+    
             ]
 
-MAX_THREADS = 20
-MAX_PING_MS = 1200
+MAX_THREADS = 15
+MAX_PING_MS = 1600
 
 def fetch_lines(url):
     try:
