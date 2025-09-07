@@ -3,7 +3,7 @@ name: Sub Checker Arista
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */1 * * *'
+    - cron: '0 */6 * * *'
 
 concurrency:
   group: ${{ github.workflow }}
@@ -29,7 +29,7 @@ jobs:
 
       - name: Clean up old results before run
         run: |
-          rm -f final.txt final_b64.txt vless*.txt vmess*.txt trojan*.txt ss*.txt hy2*.txt wireguard*.txt socks*.txt
+          rm -f final.txt normal.txt 
           rm -rf loc/
 
       - name: Set execute permissions for binaries
