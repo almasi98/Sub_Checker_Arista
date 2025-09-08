@@ -544,7 +544,7 @@ return new Response(JSON.stringify({ success: true }), {
     const tuicEnabled = url.searchParams.get('tuic') === 'on' || settings.tuic.enabled;
 
     const subscribeUrls = [
-          "https://zaya.link/Arista_HP_Final",
+           "https://zaya.link/Arista_HP_Final",
           "https://raw.githubusercontent.com/ahsan-tepo1383/kv98/refs/heads/main/final.txt",
         "https://raw.githubusercontent.com/almasi98/omax98/refs/heads/main/final.txt",
         "https://raw.githubusercontent.com/tepo18/tepo90/refs/heads/main/final.txt",
@@ -575,7 +575,6 @@ return new Response(JSON.stringify({ success: true }), {
       'https://raw.githubusercontent.com/NiREvil/vless/main/sub/clash-meta.yml',
       'https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml',
       'https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/Eternity.yml',
- 
     ];
 
     try {
@@ -2307,7 +2306,7 @@ async function generateClashConfig(ports, protocol, settings) {
 
 async function generateV2rayConfig(protocol, ports, settings) {
   const rawConfigs = await fetchConfigs([
-         "https://zaya.link/Arista_HP_Final",
+   "https://zaya.link/Arista_HP_Final",
           "https://raw.githubusercontent.com/ahsan-tepo1383/kv98/refs/heads/main/final.txt",
         "https://raw.githubusercontent.com/almasi98/omax98/refs/heads/main/final.txt",
         "https://raw.githubusercontent.com/tepo18/tepo90/refs/heads/main/final.txt",
@@ -2316,7 +2315,7 @@ async function generateV2rayConfig(protocol, ports, settings) {
         "https://raw.githubusercontent.com/tepo18/online-sshmax98/refs/heads/main/final.txt",
         "https://raw.githubusercontent.com/tepo18/sab-vip10/refs/heads/main/final.txt",
   "https://raw.githubusercontent.com/tepo18/sab-vip10/refs/heads/main/final.json",
-               "https://raw.githubusercontent.com/Kolandone/v2raycollector/main/trojan.txt",
+        "https://raw.githubusercontent.com/Kolandone/v2raycollector/main/trojan.txt",
 "https://raw.githubusercontent.com/Kolandone/v2raycollector/main/ss.txt",
 "https://raw.githubusercontent.com/Kolandone/v2raycollector/main/vless.txt",
 "https://raw.githubusercontent.com/Kolandone/v2raycollector/main/vless.txt",
@@ -2325,20 +2324,18 @@ async function generateV2rayConfig(protocol, ports, settings) {
 "https://raw.githubusercontent.com/Surfboardv2ray/Proxy-sorter/refs/heads/main/custom/udp.txt",
 "https://raw.githubusercontent.com/Surfboardv2ray/TGParse/refs/heads/main/configtg.txt",
    "https://zaya.link/Arista_HP_Final",
-"https://raw.githubusercontent.com/yebekhe/vpn-fail/refs/heads/main/sub-link.txt", 
-      'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista1.txt',
-    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista2.txt',
-    'https://raw.githubusercontent.com/Aristaproject/AristaSub/refs/heads/main/Arista3.txt',
-    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista4.txt',
-      'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista5.txt',
+"https://raw.githubusercontent.com/yebekhe/vpn-fail/refs/heads/main/sub-link.txt" 
     'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista6.txt',
-    'https://raw.githubusercontent.com/Aristaproject/AristaSub/refs/heads/main/Arista7.txt',
+    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista5.txt',
+    'https://raw.githubusercontent.com/Aristaproject/AristaSub/refs/heads/main/Arista4.txt',
+'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista7.txt',
     'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista8.txt',
-       'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista9.txt',
-      'https://raw.githubusercontent.com/NiREvil/vless/main/sub/clash-meta.yml',
-      'https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml',
-      'https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/Eternity.yml',
- 
+    'https://raw.githubusercontent.com/Aristaproject/AristaSub/refs/heads/main/Arista9.txt',
+'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista3.txt',
+    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista2.txt',
+    'https://raw.githubusercontent.com/Aristaproject/AristaSub/refs/heads/main/Arista1.txt',
+    
+    
   ], settings.remoteDNS, settings.directDNS);
 
   let configContent = rawConfigs.conversionLog || '';
