@@ -22,21 +22,329 @@ let settings = {
     interval: 100,
     packets: 3,
     clashMetaFormat: false
+  },
+  hysteria: {
+    enabled: false,
+    protocol: 'udp',
+    auth: '',
+    obfs: ''
+  },
+  tuic: {
+    enabled: false,
+    congestionControl: 'bbr',
+    alpn: ['h3']
   }
 };
 
-const jsYaml = {
-  load: (content) => {
-    try {
-      return JSON.parse(JSON.stringify(content));
-    } catch (e) {
-      return null;
-    }
-  },
-  dump: (obj) => {
-    return JSON.stringify(obj, null, 2).replace(/"/g, '').replace(/,\n/g, '\n');
+function parseVmessConfig(link) {
+  try {
+    const base64 = link.replace('vmess://', '');
+    const decoded = JSON.parse(atob(base64));
+    return {
+      server: decoded.add,
+      port: decoded.port,
+      uuid: decoded.id,
+      sni: decoded.sni || decoded.host,
+      allowInsecure: decoded.allowInsecure,
+      tls: decoded.tls
+    };
+  } catch (e) {
+    return null;
   }
-};
+}
+
+function parseVlessConfig(link) {
+  try {
+    const url = new URL(link);
+    return {
+      server: url.hostname,
+      port: url.port,
+      uuid: url.username,
+      sni: url.searchParams.get('sni'),
+      allowInsecure: url.searchParams.get('allowInsecure') === 'true',
+      tls: url.searchParams.get('security')
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function parseShadowsocksConfig(link) {
+  try {
+    const url = new URL(link);
+    const [method, password] = atob(url.username).split(':');
+    return {
+      server: url.hostname,
+      port: url.port,
+      password: password,
+      method: method
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function parseTrojanConfig(link) {
+  try {
+    const url = new URL(link);
+    return {
+      server: url.hostname,
+      port: url.port,
+      password: url.password,
+      sni: url.searchParams.get('sni'),
+      allowInsecure: url.searchParams.get('allowInsecure') === 'true',
+      tls: url.searchParams.get('security')
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function convertToHysteria(originalLink) {
+  if (!originalLink) return originalLink;
+  
+  let config;
+  try {
+    // Parse original link
+    if (originalLink.startsWith('vmess://')) {
+      config = parseVmessConfig(originalLink);
+    } else if (originalLink.startsWith('vless://')) {
+      config = parseVlessConfig(originalLink);
+    } else if (originalLink.startsWith('ss://')) {
+      config = parseShadowsocksConfig(originalLink);
+    } else if (originalLink.startsWith('trojan://')) {
+      config = parseTrojanConfig(originalLink);
+    } else {
+      return originalLink;
+    }
+
+    if (!config) return originalLink;
+   
+    const connectionType = config.type ? config.type.toLowerCase() : '';
+    if (connectionType === 'ws') {
+      console.log('[Hysteria] Skipping WS config');
+      return originalLink;
+    }
+
+    const hasTLS = config.tls === 'tls' || config.security === 'tls';
+    const allowInsecure = config.allowInsecure || settings.hysteria.allowInsecure || false;
+    
+    if (!hasTLS && !allowInsecure) {
+      console.log('[Hysteria] Skipping non-TLS config');
+      return originalLink;
+    }
+
+    const hysteriaLink = new URL(`hysteria://${config.server}:${config.port || 443}`);
+
+    if (config.uuid || config.password) {
+      hysteriaLink.searchParams.set('auth', config.uuid || config.password);
+    }
+
+    hysteriaLink.searchParams.set('protocol', settings.hysteria.protocol || 'udp');
+    hysteriaLink.searchParams.set('insecure', allowInsecure ? '1' : '0');
+  
+    if (config.sni) {
+      hysteriaLink.searchParams.set('sni', config.sni);
+    }
+    if (settings.hysteria.obfs) {
+      hysteriaLink.searchParams.set('obfs', settings.hysteria.obfs);
+    }
+    if (settings.hysteria.upMbps) {
+      hysteriaLink.searchParams.set('upmbps', settings.hysteria.upMbps);
+    }
+    if (settings.hysteria.downMbps) {
+      hysteriaLink.searchParams.set('downmbps', settings.hysteria.downMbps);
+    }
+
+    return hysteriaLink.toString();
+    
+  } catch (e) {
+    console.error('[Hysteria] Conversion failed:', e.message);
+    return originalLink;
+  }
+}
+
+function convertToTuic(originalLink) {
+  if (!originalLink) return originalLink;
+  
+  let config;
+  try {
+    if (originalLink.startsWith('vmess://')) {
+      config = parseVmessConfig(originalLink);
+    } else if (originalLink.startsWith('vless://')) {
+      config = parseVlessConfig(originalLink);
+    } else if (originalLink.startsWith('ss://')) {
+      config = parseShadowsocksConfig(originalLink);
+    } else if (originalLink.startsWith('trojan://')) {
+      config = parseTrojanConfig(originalLink);
+    } else {
+      return originalLink;
+    }
+
+    if (!config) return originalLink;
+    
+    const connectionType = config.type ? config.type.toLowerCase() : '';
+    if (connectionType === 'ws') {
+      console.log('[DEBUG] Skipping WS config');
+      return originalLink;
+    }
+
+    const hasTLS = config.tls === 'tls' || config.security === 'tls';
+    if (!hasTLS) {
+      console.log('[DEBUG] Skipping non-TLS config');
+      return originalLink;
+    }
+
+    const auth = config.uuid || config.password || '';
+    const tuicLink = new URL(`tuic://${auth}@${config.server}:${config.port || 443}`);
+    
+    tuicLink.searchParams.set('congestion_control', settings.tuic.congestionControl || 'bbr');
+    
+    if (settings.tuic.alpn?.length > 0) {
+      tuicLink.searchParams.set('alpn', settings.tuic.alpn.join(','));
+    }
+    if (config.sni) {
+      tuicLink.searchParams.set('sni', config.sni);
+    }
+    if (config.allowInsecure !== undefined) {
+      tuicLink.searchParams.set('allow_insecure', config.allowInsecure.toString());
+    }
+    if (settings.enableUDP) {
+      tuicLink.searchParams.set('udp_relay_mode', 'native');
+    }
+
+    return tuicLink.toString();
+    
+  } catch (e) {
+    console.error('[ERROR] Conversion failed:', e.message);
+    return originalLink;
+  }
+}
+
+function isSuitableForHysteria(config) {
+  if (!config) return false;
+  const port = config.port ? Number(config.port) : 443;
+  const validPorts = [443, 8443, 2053];
+  const isDomain = config.server && /[a-zA-Z]/.test(config.server);
+  return validPorts.includes(port) && isDomain;
+}
+
+function isSuitableForTuic(config) {
+  if (!config) return false;
+  const port = config.port ? Number(config.port) : 443;
+  const validPorts = [443, 8443];
+  const hasTLS = config.tls === 'tls' || config.security === 'tls';
+  return validPorts.includes(port) && hasTLS;
+}
+
+function generateConversionNotice(originalType, newType, success, reason = '') {
+  const color = success ? '#4CAF50' : '#FF5252';
+  const icon = success ? '✓' : '✗';
+  return `${icon} ${originalType.toUpperCase()} → ${newType.toUpperCase()}: ${
+    success ? 'Converted successfully' : 'Skipped - ' + reason
+  }\n`;
+}
+
+async function processConfig(url, text, allConfigs, remoteDNS, directDNS) {
+  if (url.endsWith('.yaml') || url.endsWith('.yml')) {
+    allConfigs.yaml.push(text.trim());
+  } else if (url.endsWith('.txt')) {
+    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+    const usedAddresses = new Set();
+    let conversionLog = '';
+
+    for (const line of lines) {
+      try {
+        let config, type;
+        
+        if (line.startsWith('vmess://')) {
+          config = parseVmessConfig(line);
+          type = 'vmess';
+        } else if (line.startsWith('vless://')) {
+          config = parseVlessConfig(line);
+          type = 'vless';
+        } else if (line.startsWith('ss://')) {
+          config = parseShadowsocksConfig(line);
+          type = 'shadowsocks';
+        } else if (line.startsWith('trojan://')) {
+          config = parseTrojanConfig(line);
+          type = 'trojan';
+        } else if (line.startsWith('tuic://')) {
+          const match = line.match(/@([^:]+):(\d+)/);
+          if (match) {
+            const address = match[1];
+            const port = match[2];
+            const serverKey = `${address}:${port}`;
+            if (!usedAddresses.has(serverKey)) {
+              usedAddresses.add(serverKey);
+              allConfigs.tuic.push(processTuic(line, settings));
+            }
+          }
+          continue;
+        } else if (line.startsWith('hysteria://')) {
+          const match = line.match(/@([^:]+):(\d+)/);
+          if (match) {
+            const address = match[1];
+            const port = match[2];
+            const serverKey = `${address}:${port}`;
+            if (!usedAddresses.has(serverKey)) {
+              usedAddresses.add(serverKey);
+              allConfigs.hysteria.push(processHysteria(line, settings));
+            }
+          }
+          continue;
+        }
+
+        if (!config) continue;
+
+        const address = config.server;
+        const port = config.port || 443;
+        const serverKey = `${address}:${port}`;
+        
+        if (usedAddresses.has(serverKey)) continue;
+        usedAddresses.add(serverKey);
+
+        if (settings.hysteria.enabled || settings.tuic.enabled) {
+          if (settings.hysteria.enabled && isSuitableForHysteria(config)) {
+            const converted = convertToHysteria(line);
+            if (converted && converted !== line) {
+              allConfigs.hysteria.push(converted);
+              conversionLog += generateConversionNotice(type, 'hysteria', true);
+            } else {
+              conversionLog += generateConversionNotice(type, 'hysteria', false, 'Invalid configuration');
+            }
+          }
+
+          if (settings.tuic.enabled && isSuitableForTuic(config)) {
+            const converted = convertToTuic(line);
+            if (converted && converted !== line) {
+              allConfigs.tuic.push(converted);
+              conversionLog += generateConversionNotice(type, 'tuic', true);
+            } else {
+              conversionLog += generateConversionNotice(type, 'tuic', false, 'Invalid configuration');
+            }
+          }
+        }
+
+        if (type === 'vmess') {
+          allConfigs.vmess.push(processVmess(line, settings));
+        } else if (type === 'vless') {
+          allConfigs.vless.push(processVless(line, settings));
+        } else if (type === 'shadowsocks') {
+          allConfigs.shadowsocks.push(processShadowsocks(line, settings));
+        } else if (type === 'trojan') {
+          allConfigs.trojan.push(processTrojan(line, settings));
+        }
+      } catch (e) {
+        console.error('Error processing line:', line, e);
+      }
+    }
+
+    if (conversionLog) {
+      allConfigs.conversionLog = `=== Conversion Results ===\n${conversionLog}\n`;
+    }
+  }
+}
 
 async function handleRequest(request) {
   const url = new URL(request.url);
@@ -45,7 +353,7 @@ async function handleRequest(request) {
   const subscribePaths = ['/subscribe', '/subscribe/clash.yaml', '/subscribe/v2ray.txt'];
 
   if (!subscribePaths.includes(url.pathname) && url.pathname !== '/' && url.pathname !== '/login') {
-    if (url.pathname === '/panel' && request.method !== 'POST') {
+    if (url.pathname === '/panel' && request.method === 'GET') {
     } else if (!uuid || uuid !== UUID) {
       return new Response('Invalid or missing UUID. Please provide your UUID in the X-User-UUID header.', {
         status: 403,
@@ -66,14 +374,28 @@ async function handleRequest(request) {
           domains: kvSettings.domains || [],
           cleanIPs: kvSettings.cleanIPs || [],
           snis: kvSettings.snis || [],
+          useIPv6: kvSettings.useIPv6 || false,
           selectedProtocols: kvSettings.selectedProtocols || [],
           selectedPorts: kvSettings.selectedPorts || [],
+          enableUDP: kvSettings.enableUDP || false,
+          tlsMode: kvSettings.tlsMode || 'none',
           fragment: kvSettings.fragment || {
             enabled: false,
             size: 1200,
             interval: 100,
             packets: 3,
             clashMetaFormat: false
+          },
+          hysteria: kvSettings.hysteria || {
+            enabled: false,
+            protocol: 'udp',
+            auth: '',
+            obfs: ''
+          },
+          tuic: kvSettings.tuic || {
+            enabled: false,
+            congestionControl: 'bbr',
+            alpn: ['h3']
           }
         };
       }
@@ -98,7 +420,7 @@ async function handleRequest(request) {
         return new Response(renderPanel(), {
           headers: {
             'content-type': 'text/html',
-            'Set-Cookie': `session=${sessionToken}; Path=/; HttpOnly`
+            'Set-Cookie': `session=${sessionToken}; Path=/; HttpOnly; SameSite=Strict`
           }
         });
       } else {
@@ -114,19 +436,19 @@ async function handleRequest(request) {
   }
 
   if (url.pathname === '/panel') {
+    const cookies = request.headers.get('Cookie') || '';
+    const sessionMatch = cookies.match(/session=([^;]+)/);
+    const sessionToken = sessionMatch ? sessionMatch[1] : null;
+    const storedSession = await ARISTA.get(`session-${UUID}`);
+
+    if (!sessionToken || sessionToken !== storedSession) {
+      return new Response('Unauthorized. Please login first.', {
+        status: 401,
+        headers: { 'content-type': 'text/plain' }
+      });
+    }
+
     if (request.method === 'GET') {
-      const cookies = request.headers.get('Cookie') || '';
-      const sessionMatch = cookies.match(/session=([^;]+)/);
-      const sessionToken = sessionMatch ? sessionMatch[1] : null;
-      const storedSession = await ARISTA.get(`session-${UUID}`);
-
-      if (!sessionToken || sessionToken !== storedSession) {
-        return new Response('Unauthorized. Please login first.', {
-          status: 401,
-          headers: { 'content-type': 'text/plain' }
-        });
-      }
-
       const cacheKey = `${url.origin}/panel`;
       let response = await cache.match(cacheKey);
       if (!response) {
@@ -142,50 +464,69 @@ async function handleRequest(request) {
     }
 
     if (request.method === 'POST') {
-      const body = await request.json();
-      const validationErrors = validateSettings(body);
-
-      if (validationErrors.length > 0) {
-        return new Response(validationErrors.join('\n'), {
-          headers: { 'content-type': 'text/plain' },
-          status: 400
-        });
-      }
-
-      const newSettings = {
-        remoteDNS: Array.isArray(body.remoteDNS) ? body.remoteDNS : [],
-        directDNS: Array.isArray(body.directDNS) ? body.directDNS : [],
-        domains: Array.isArray(body.domains) ? body.domains : [],
-        cleanIPs: Array.isArray(body.cleanIPs) ? body.cleanIPs : [],
-        snis: Array.isArray(body.snis) ? body.snis : [],
-        useIPv6: Boolean(body.useIPv6),
-        selectedProtocols: Array.isArray(body.selectedProtocols) ? body.selectedProtocols : [],
-        selectedPorts: Array.isArray(body.selectedPorts) ? body.selectedPorts : [],
-        enableUDP: Boolean(body.enableUDP),
-        tlsMode: ['none', 'tls', 'xtls'].includes(body.tlsMode) ? body.tlsMode : 'none',
-        fragment: {
-          enabled: Boolean(body.fragment?.enabled),
-          clashMetaFormat: Boolean(body.fragment?.clashMetaFormat),
-          size: Number(body.fragment?.size) || 1200,
-          interval: Number(body.fragment?.interval) || 100,
-          packets: Number(body.fragment?.packets) || 3
-        }
-      };
-
       try {
+        const body = await request.json();
+        const validationErrors = validateSettings(body);
+
+        if (validationErrors.length > 0) {
+          return new Response(JSON.stringify({ success: false, errors: validationErrors }), {
+            headers: { 'content-type': 'application/json' },
+            status: 400
+          });
+        }
+
+        const newSettings = {
+          remoteDNS: Array.isArray(body.remoteDNS) ? body.remoteDNS : [],
+          directDNS: Array.isArray(body.directDNS) ? body.directDNS : [],
+          domains: Array.isArray(body.domains) ? body.domains : [],
+          cleanIPs: Array.isArray(body.cleanIPs) ? body.cleanIPs : [],
+          snis: Array.isArray(body.snis) ? body.snis : [],
+          useIPv6: Boolean(body.useIPv6),
+          selectedProtocols: Array.isArray(body.selectedProtocols) ? body.selectedProtocols : [],
+          selectedPorts: Array.isArray(body.selectedPorts) ? body.selectedPorts : [],
+          enableUDP: Boolean(body.enableUDP),
+          tlsMode: ['none', 'tls', 'xtls'].includes(body.tlsMode) ? body.tlsMode : 'none',
+          fragment: {
+            enabled: Boolean(body.fragment?.enabled),
+            clashMetaFormat: Boolean(body.fragment?.clashMetaFormat),
+            size: Number(body.fragment?.size) || 1200,
+            interval: Number(body.fragment?.interval) || 100,
+            packets: Number(body.fragment?.packets) || 3
+          },
+          hysteria: {
+            enabled: Boolean(body.hysteria?.enabled),
+            protocol: ['udp', 'tcp'].includes(body.hysteria?.protocol) ? body.hysteria.protocol : 'udp',
+            auth: String(body.hysteria?.auth || ''),
+            obfs: String(body.hysteria?.obfs || '')
+          },
+          tuic: {
+            enabled: Boolean(body.tuic?.enabled),
+            congestionControl: ['bbr', 'cubic'].includes(body.tuic?.congestionControl) ? body.tuic.congestionControl : 'bbr',
+            alpn: Array.isArray(body.tuic?.alpn) ? body.tuic.alpn : ['h3']
+          }
+        };
+
         await ARISTA.put(`settings-${uuid}`, JSON.stringify(newSettings), { expirationTtl: 86400 * 30 });
-        settings = newSettings;
-        return new Response('Settings saved successfully.', {
-          headers: { 'content-type': 'text/plain' }
-        });
+settings = newSettings;
+
+return new Response(JSON.stringify({ success: true }), {
+  headers: { 'content-type': 'application/json' }
+}); 
       } catch (e) {
-        return new Response('Failed to save settings. Please try again.', {
-          headers: { 'content-type': 'text/plain' },
+        return new Response(JSON.stringify({ success: false, error: e.message }), {
+          headers: { 'content-type': 'application/json' },
           status: 500
         });
       }
     }
   }
+
+ if (url.pathname === '/panel/settings') {
+  const settings = await ARISTA.get(`settings-${uuid}`, { type: 'json' }) || {};
+  return new Response(JSON.stringify(settings), {
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
 
   if (url.pathname === '/subscribe') {
     const cacheKey = `${url.href}`;
@@ -199,28 +540,42 @@ async function handleRequest(request) {
     const fragmentSize = url.searchParams.get('size') || settings.fragment.size;
     const fragmentInterval = url.searchParams.get('interval') || settings.fragment.interval;
     const clashMetaFormat = fragmentParam === 'clash' || settings.fragment.clashMetaFormat;
+    const hysteriaEnabled = url.searchParams.get('hysteria') === 'on' || settings.hysteria.enabled;
+    const tuicEnabled = url.searchParams.get('tuic') === 'on' || settings.tuic.enabled;
 
-    const subscribeUrls = ["https://raw.githubusercontent.com/tepo18/sab-vip10/main/final.txt",
-      "https://raw.githubusercontent.com/tepo18/sab-vip10/main/final1.txt"
-      "https://raw.githubusercontent.com/tepo18/sab-vip10/main/final2.txt"
-      "https://raw.githubusercontent.com/tepo18/sab-vip10/main/final3.txt"
-      "https://raw.githubusercontent.com/tepo18/sab-vip10/main/final10.txt"
-      "https://raw.githubusercontent.com/tepo18/tepo90/main/final.txt"
-      "https://raw.githubusercontent.com/tepo18/tepo90/main/final1.txt"
-      "https://raw.githubusercontent.com/tepo18/reza-shah1320/main/final.txt"
-      "https://raw.githubusercontent.com/tepo18/reza-shah1320/main/final1.txt"
-      "https://raw.githubusercontent.com/tepo18/online-sshmax98/main/final.txt"
-      "https://raw.githubusercontent.com/tepo18/online-sshmax98/main/final1.txt"
-      "https://raw.githubusercontent.com/tepo18/online-sshmax98/main/final3.txt"
-      "https://raw.githubusercontent.com/tepo18/online-sshmax98/main/tepo10.txt"
-      "https://raw.githubusercontent.com/tepo18/online-sshmax98/main/tepo20.txt"
-      "https://raw.githubusercontent.com/tepo18/online-sshmax98/main/tepo30.txt"
-      "https://raw.githubusercontent.com/tepo18/online-sshmax98/main/tepo40.txt"
-      "https://raw.githubusercontent.com/tepo18/online-sshmax98/main/tepo50.txt"
-      "https://raw.githubusercontent.com/tepo18/online-sshmax98/main/tepo60.txt"
+    const subscribeUrls = [
+          "https://zaya.link/Arista_HP_Final",
+          "https://raw.githubusercontent.com/ahsan-tepo1383/kv98/refs/heads/main/final.txt",
+        "https://raw.githubusercontent.com/almasi98/omax98/refs/heads/main/final.txt",
+        "https://raw.githubusercontent.com/tepo18/tepo90/refs/heads/main/final.txt",
+        "https://raw.githubusercontent.com/tepo18/sab-vip10/refs/heads/main/final1.txt",
+        "https://raw.githubusercontent.com/tepo18/reza-shah1320/refs/heads/main/final.txt",
+        "https://raw.githubusercontent.com/tepo18/online-sshmax98/refs/heads/main/final.txt",
+        "https://raw.githubusercontent.com/tepo18/sab-vip10/refs/heads/main/final.txt",
+  "https://raw.githubusercontent.com/tepo18/sab-vip10/refs/heads/main/final.json",
+               "https://raw.githubusercontent.com/Kolandone/v2raycollector/main/trojan.txt",
+"https://raw.githubusercontent.com/Kolandone/v2raycollector/main/ss.txt",
+"https://raw.githubusercontent.com/Kolandone/v2raycollector/main/vless.txt",
+"https://raw.githubusercontent.com/Kolandone/v2raycollector/main/vless.txt",
+"https://raw.githubusercontent.com/Kolandone/v2raycollector/main/config_lite.txt",
+"https://raw.githubusercontent.com/Surfboardv2ray/Proxy-sorter/refs/heads/main/output/converted.txt",
+"https://raw.githubusercontent.com/Surfboardv2ray/Proxy-sorter/refs/heads/main/custom/udp.txt",
+"https://raw.githubusercontent.com/Surfboardv2ray/TGParse/refs/heads/main/configtg.txt",
+   "https://zaya.link/Arista_HP_Final",
+"https://raw.githubusercontent.com/yebekhe/vpn-fail/refs/heads/main/sub-link.txt", 
+      'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista1.txt',
+    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista2.txt',
+    'https://raw.githubusercontent.com/Aristaproject/AristaSub/refs/heads/main/Arista3.txt',
+    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista4.txt',
+      'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista5.txt',
+    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista6.txt',
+    'https://raw.githubusercontent.com/Aristaproject/AristaSub/refs/heads/main/Arista7.txt',
+    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista8.txt',
+       'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista9.txt',
       'https://raw.githubusercontent.com/NiREvil/vless/main/sub/clash-meta.yml',
       'https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml',
       'https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/Eternity.yml',
+ 
     ];
 
     try {
@@ -233,9 +588,17 @@ async function handleRequest(request) {
           size: fragmentSize,
           interval: fragmentInterval,
           packets: settings.fragment.packets
+        },
+        hysteria: {
+          ...settings.hysteria,
+          enabled: hysteriaEnabled
+        },
+        tuic: {
+          ...settings.tuic,
+          enabled: tuicEnabled
         }
       };
-      
+
       const categorizedConfigs = clashMetaFormat ? 
         generateClashConfig(ports, protocol, currentSettings) :
         generateV2rayConfig(protocol, ports, currentSettings);
@@ -264,6 +627,8 @@ async function handleRequest(request) {
     const fragmentSize = url.searchParams.get('size') || settings.fragment.size;
     const fragmentInterval = url.searchParams.get('interval') || settings.fragment.interval;
     const clashMetaFormat = true;
+    const hysteriaEnabled = url.searchParams.get('hysteria') === 'on' || settings.hysteria.enabled;
+    const tuicEnabled = url.searchParams.get('tuic') === 'on' || settings.tuic.enabled;
 
     const clashConfig = await generateClashConfig(ports, protocol, {
       ...settings,
@@ -273,6 +638,14 @@ async function handleRequest(request) {
         size: fragmentSize,
         interval: fragmentInterval,
         packets: settings.fragment.packets
+      },
+      hysteria: {
+        ...settings.hysteria,
+        enabled: hysteriaEnabled
+      },
+      tuic: {
+        ...settings.tuic,
+        enabled: tuicEnabled
       }
     });
     return new Response(clashConfig, {
@@ -281,12 +654,15 @@ async function handleRequest(request) {
   }
 
   if (url.pathname === '/subscribe/v2ray.txt') {
-    const protocol = url.searchParams.get('protocol') || settings.selectedProtocols.join(',');
+    let protocol = url.searchParams.get('protocol') || settings.selectedProtocols.join(',');
+    protocol = protocol.split(',').filter(p => p.toLowerCase() !== 'yaml').join(',');
     const ports = url.searchParams.get('ports') || settings.selectedPorts.join(',');
     const fragmentEnabled = url.searchParams.get('fragment') === 'on';
     const fragmentSize = url.searchParams.get('size') || settings.fragment.size;
     const fragmentInterval = url.searchParams.get('interval') || settings.fragment.interval;
     const clashMetaFormat = false;
+    const hysteriaEnabled = url.searchParams.get('hysteria') === 'on' || settings.hysteria.enabled;
+    const tuicEnabled = url.searchParams.get('tuic') === 'on' || settings.tuic.enabled;
 
     const v2rayConfig = await generateV2rayConfig(protocol, ports, {
       ...settings,
@@ -296,6 +672,14 @@ async function handleRequest(request) {
         size: fragmentSize,
         interval: fragmentInterval,
         packets: settings.fragment.packets
+      },
+      hysteria: {
+        ...settings.hysteria,
+        enabled: hysteriaEnabled
+      },
+      tuic: {
+        ...settings.tuic,
+        enabled: tuicEnabled
       }
     });
     return new Response(v2rayConfig, {
@@ -309,8 +693,7 @@ async function handleRequest(request) {
 }
 
 function renderLoginPage(errorMessage = '') {
-  return `
-<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -419,13 +802,11 @@ function renderLoginPage(errorMessage = '') {
     </form>
   </div>
 </body>
-</html>
-  `;
+</html>`;
 }
 
 function renderPanel() {
-  return `
-<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -526,7 +907,9 @@ function renderPanel() {
     .port-selection {
       display: flex;
       justify-content: space-between;
+      flex-wrap: wrap;
       margin-top: 20px;
+      gap: 10px;
     }
     .port-card {
       width: 120px;
@@ -544,6 +927,17 @@ function renderPanel() {
     }
     .port-card.selected {
       background-color: #4CAF50;
+    }
+    .port-guide {
+      background-color: #f8f9fa;
+      border-left: 4px solid #3B82F6;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px 0;
+      color: #333;
+    }
+    .port-guide p {
+      margin: 5px 0;
     }
     .protocol-selection {
       display: flex;
@@ -571,7 +965,12 @@ function renderPanel() {
       background-color: #4CAF50;
       border: 2px solid gold;
     }
-    .fragment-card {
+    .feature-cards {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+    .feature-card {
       width: 200px;
       height: 100px;
       background-color: #1E90FF;
@@ -584,26 +983,21 @@ function renderPanel() {
       cursor: pointer;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
       transition: transform 0.3s;
-      margin-top: 20px;
+      margin: 0 10px;
     }
-    .fragment-card.active {
+    .feature-card:hover {
+      transform: scale(1.05);
+    }
+    .feature-card.active {
       background-color: #4CAF50;
       border: 2px solid gold;
     }
-    .fragment-settings {
+    .feature-settings {
       display: none;
       margin-top: 20px;
       padding: 15px;
       background-color: #f5f5f5;
       border-radius: 8px;
-    }
-    .fragment-type {
-      display: flex;
-      margin-top: 10px;
-    }
-    .fragment-type label {
-      margin-right: 15px;
-      cursor: pointer;
     }
     .copy-message {
       background-color: pink;
@@ -620,7 +1014,6 @@ function renderPanel() {
     .udp-tls-section label {
       margin-right: 10px;
     }
-    /* Wizard Styles */
     .wizard-container {
       background-color: #1E3A8A;
       color: white;
@@ -739,6 +1132,7 @@ function renderPanel() {
       document.getElementById('wizardPanel').style.display = 'none';
       currentStep = 1;
       updateProgress();
+      updateStepVisibility();
     }
 
     function nextStep() {
@@ -777,45 +1171,49 @@ function renderPanel() {
         option.style.backgroundColor = option.textContent.includes(goal) ? '#10B981' : '#3B82F6';
       });
       
-      // Set recommended settings based on goal
       switch(goal) {
         case '🚀 Speed':
           recommendedSettings = {
             protocols: ['vless', 'trojan'],
-            ports: ['443', '8443'],
+            ports: ['443', '2053', '8443'],
             tlsMode: 'tls',
             enableUDP: false,
             useIPv6: false,
-            fragment: false
+            fragment: false,
+            hysteria: false,
+            tuic: true
           };
           break;
         case '🔒 Security':
           recommendedSettings = {
             protocols: ['trojan'],
-            ports: ['443'],
+            ports: ['443', '2053'],
             tlsMode: 'tls',
             enableUDP: false,
             useIPv6: false,
-            fragment: false
+            fragment: false,
+            hysteria: false,
+            tuic: false
           };
           break;
         case '🌐 Bypass':
           recommendedSettings = {
             protocols: ['vmess', 'vless'],
-            ports: ['80', '443', '8080'],
+            ports: ['80', '443', '8080', '2053', '2087'],
             tlsMode: 'none',
             enableUDP: true,
             useIPv6: true,
-            fragment: true
+            fragment: true,
+            hysteria: true,
+            tuic: false
           };
           break;
       }
       
-      // Update recommendation display
       const recText = {
-        '🚀 Speed': 'For maximum speed, VLESS/Trojan with TLS on ports 443/8443 is recommended.',
-        '🔒 Security': 'For maximum security, Trojan with TLS on port 443 is recommended.',
-        '🌐 Bypass': 'For bypassing restrictions, VMESS/VLESS with multiple ports and IPv6 is recommended.'
+        '🚀 Speed': 'For maximum speed, VLESS/Trojan with TLS on ports 443/2053/8443 is recommended. TUIC is enabled for better performance.',
+        '🔒 Security': 'For maximum security, Trojan with TLS on ports 443/2053 is recommended.',
+        '🌐 Bypass': 'For bypassing restrictions, VMESS/VLESS with multiple ports (80/443/8080/2053/2087) and IPv6 is recommended. Hysteria is enabled for better bypass capability.'
       }[goal];
       
       document.getElementById('wizardRecommendation').innerHTML = recText;
@@ -824,13 +1222,11 @@ function renderPanel() {
 
     function testConnection() {
       alert('Testing connection with recommended settings...');
-      // In a real implementation, this would test the connection
     }
 
     function applyRecommendedSettings() {
       if (!selectedGoal) return;
       
-      // Apply the recommended settings to the UI
       recommendedSettings.protocols.forEach(protocol => {
         const cards = document.querySelectorAll('.protocol-card');
         cards.forEach(card => {
@@ -857,6 +1253,16 @@ function renderPanel() {
         document.getElementById('fragmentCard').classList.add('active');
         document.getElementById('fragmentSettings').style.display = 'block';
       }
+
+      if (recommendedSettings.hysteria) {
+        document.getElementById('hysteriaCard').classList.add('active');
+        document.getElementById('hysteriaSettings').style.display = 'block';
+      }
+
+      if (recommendedSettings.tuic) {
+        document.getElementById('tuicCard').classList.add('active');
+        document.getElementById('tuicSettings').style.display = 'block';
+      }
       
       alert('Recommended settings have been applied! You can further customize them or save.');
     }
@@ -876,40 +1282,63 @@ function renderPanel() {
       const clashMetaFormat = document.getElementById('clashMetaFormat').checked;
       const fragmentSize = document.getElementById('fragmentSize').value;
       const fragmentInterval = document.getElementById('fragmentInterval').value;
+      const hysteriaEnabled = document.getElementById('hysteriaCard').classList.contains('active');
+      const hysteriaProtocol = document.getElementById('hysteriaProtocol').value;
+      const hysteriaAuth = document.getElementById('hysteriaAuth').value;
+      const hysteriaObfs = document.getElementById('hysteriaObfs').value;
+      const tuicEnabled = document.getElementById('tuicCard').classList.contains('active');
+      const tuicCongestionControl = document.getElementById('tuicCongestionControl').value;
+      const tuicAlpn = document.getElementById('tuicAlpn').value.split(',').map(v => v.trim()).filter(Boolean);
 
-      const response = await fetch('/panel', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-UUID': '${UUID}'
-        },
-        body: JSON.stringify({ 
-          remoteDNS, 
-          directDNS, 
-          domains, 
-          cleanIPs, 
-          snis, 
-          useIPv6, 
-          selectedProtocols, 
-          selectedPorts, 
-          enableUDP, 
-          tlsMode,
-          fragment: {
-            enabled: fragmentEnabled,
-            clashMetaFormat: clashMetaFormat,
-            size: fragmentSize,
-            interval: fragmentInterval
-          }
-        })
-      });
+      try {
+        const response = await fetch('/panel', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-UUID': '${UUID}'
+          },
+          body: JSON.stringify({ 
+            remoteDNS, 
+            directDNS, 
+            domains, 
+            cleanIPs, 
+            snis, 
+            useIPv6, 
+            selectedProtocols, 
+            selectedPorts, 
+            enableUDP, 
+            tlsMode,
+            fragment: {
+              enabled: fragmentEnabled,
+              clashMetaFormat: clashMetaFormat,
+              size: fragmentSize,
+              interval: fragmentInterval
+            },
+            hysteria: {
+              enabled: hysteriaEnabled,
+              protocol: hysteriaProtocol,
+              auth: hysteriaAuth,
+              obfs: hysteriaObfs
+            },
+            tuic: {
+              enabled: tuicEnabled,
+              congestionControl: tuicCongestionControl,
+              alpn: tuicAlpn
+            }
+          })
+        });
 
-      if (response.ok) {
-        document.getElementById('saveMessage').innerText = 'Settings saved successfully.';
-        document.getElementById('saveMessage').style.display = 'block';
-        setTimeout(() => document.getElementById('saveMessage').style.display = 'none', 3000);
-      } else {
-        const errorText = await response.text();
-        document.getElementById('saveMessage').innerText = errorText;
+        const result = await response.json();
+        if (result.success) {
+          document.getElementById('saveMessage').innerText = 'Settings saved successfully.';
+          document.getElementById('saveMessage').style.display = 'block';
+          setTimeout(() => document.getElementById('saveMessage').style.display = 'none', 3000);
+        } else {
+          document.getElementById('saveMessage').innerText = result.message || 'Failed to save settings';
+          document.getElementById('saveMessage').style.display = 'block';
+        }
+      } catch (e) {
+        document.getElementById('saveMessage').innerText = 'Failed to save settings';
         document.getElementById('saveMessage').style.display = 'block';
       }
     }
@@ -950,11 +1379,11 @@ function renderPanel() {
       });
     }
 
-    function toggleFragment() {
-      const fragmentCard = document.getElementById('fragmentCard');
-      fragmentCard.classList.toggle('active');
-      document.getElementById('fragmentSettings').style.display = 
-        fragmentCard.classList.contains('active') ? 'block' : 'none';
+    function toggleFeature(feature) {
+      const featureCard = document.getElementById(feature + 'Card');
+      featureCard.classList.toggle('active');
+      document.getElementById(feature + 'Settings').style.display = 
+        featureCard.classList.contains('active') ? 'block' : 'none';
     }
 
     function generateLink() {
@@ -964,6 +1393,8 @@ function renderPanel() {
       const clashMetaFormat = document.getElementById('clashMetaFormat').checked;
       const fragmentSize = document.getElementById('fragmentSize').value;
       const fragmentInterval = document.getElementById('fragmentInterval').value;
+      const hysteriaEnabled = document.getElementById('hysteriaCard').classList.contains('active');
+      const tuicEnabled = document.getElementById('tuicCard').classList.contains('active');
 
       if (selectedPorts.length === 0 || selectedProtocols.length === 0) {
         document.getElementById('copyMessage').innerText = 'Please select at least one port and one protocol.';
@@ -974,16 +1405,30 @@ function renderPanel() {
 
       const baseUrl = window.location.origin;
       let link;
+      const hasYaml = selectedProtocols.includes('yaml');
+      const nonYamlProtocols = selectedProtocols.filter(p => p !== 'yaml');
 
-      if (clashMetaFormat) {
-        link = baseUrl + '/subscribe/clash.yaml?protocol=' + selectedProtocols.join(',') + '&ports=' + selectedPorts.join(',');
+      if (hasYaml || clashMetaFormat) {
+        link = baseUrl + '/subscribe/clash.yaml?protocol=' + (hasYaml ? 'vmess,vless,trojan,shadowsocks' : nonYamlProtocols.join(',')) + '&ports=' + selectedPorts.join(',');
+        if (fragmentEnabled) {
+          link += '&fragment=' + (clashMetaFormat ? 'clash' : 'on') + '&size=' + fragmentSize + '&interval=' + fragmentInterval;
+        }
+        if (hysteriaEnabled) {
+          link += '&hysteria=on';
+        }
+        if (tuicEnabled) {
+          link += '&tuic=on';
+        }
+      } else {
+        link = baseUrl + '/subscribe/v2ray.txt?protocol=' + nonYamlProtocols.join(',') + '&ports=' + selectedPorts.join(',');
         if (fragmentEnabled) {
           link += '&fragment=on&size=' + fragmentSize + '&interval=' + fragmentInterval;
         }
-      } else {
-        link = baseUrl + '/subscribe/v2ray.txt?protocol=' + selectedProtocols.join(',') + '&ports=' + selectedPorts.join(',');
-        if (fragmentEnabled) {
-          link += '&fragment=on&size=' + fragmentSize + '&interval=' + fragmentInterval;
+        if (hysteriaEnabled) {
+          link += '&hysteria=on';
+        }
+        if (tuicEnabled) {
+          link += '&tuic=on';
         }
       }
 
@@ -994,17 +1439,18 @@ function renderPanel() {
       });
     }
 
-    window.onload = async () => {
+    async function loadSettings() {
       try {
-        const response = await fetch('/panel', { 
-          method: 'GET', 
+        const response = await fetch('/panel/settings', {
           headers: { 
             'X-User-UUID': '${UUID}',
             'Accept': 'application/json'
-          } 
+          }
         });
+        
         if (response.ok) {
           const settings = await response.json();
+          
           document.getElementById('remoteDNS').value = settings.remoteDNS?.join(',') || '';
           document.getElementById('directDNS').value = settings.directDNS?.join(',') || '';
           document.getElementById('domains').value = settings.domains?.join(',') || '';
@@ -1012,9 +1458,11 @@ function renderPanel() {
           document.getElementById('snis').value = settings.snis?.join(',') || '';
           document.getElementById('enableUDP').checked = settings.enableUDP || false;
           document.getElementById('tlsMode').value = settings.tlsMode || 'none';
+          
           if (settings.useIPv6) {
             document.getElementById('ipv6Section').classList.add('active');
           }
+          
           (settings.selectedPorts || []).forEach(port => {
             const portCards = document.querySelectorAll('.port-card');
             portCards.forEach(card => {
@@ -1023,6 +1471,7 @@ function renderPanel() {
               }
             });
           });
+          
           (settings.selectedProtocols || []).forEach(protocol => {
             const protocolCards = document.querySelectorAll('.protocol-card');
             protocolCards.forEach(card => {
@@ -1031,6 +1480,7 @@ function renderPanel() {
               }
             });
           });
+          
           if (settings.fragment?.enabled) {
             document.getElementById('fragmentCard').classList.add('active');
             document.getElementById('fragmentSettings').style.display = 'block';
@@ -1038,11 +1488,28 @@ function renderPanel() {
             document.getElementById('fragmentInterval').value = settings.fragment.interval || 100;
             document.getElementById('clashMetaFormat').checked = settings.fragment.clashMetaFormat || false;
           }
+          
+          if (settings.hysteria?.enabled) {
+            document.getElementById('hysteriaCard').classList.add('active');
+            document.getElementById('hysteriaSettings').style.display = 'block';
+            document.getElementById('hysteriaProtocol').value = settings.hysteria.protocol || 'udp';
+            document.getElementById('hysteriaAuth').value = settings.hysteria.auth || '';
+            document.getElementById('hysteriaObfs').value = settings.hysteria.obfs || '';
+          }
+          
+          if (settings.tuic?.enabled) {
+            document.getElementById('tuicCard').classList.add('active');
+            document.getElementById('tuicSettings').style.display = 'block';
+            document.getElementById('tuicCongestionControl').value = settings.tuic.congestionControl || 'bbr';
+            document.getElementById('tuicAlpn').value = settings.tuic.alpn?.join(',') || 'h3';
+          }
         }
       } catch (e) {
         console.error('Error loading settings:', e);
       }
-    };
+    }
+
+    window.onload = loadSettings;
   </script>
 </head>
 <body>
@@ -1057,36 +1524,36 @@ function renderPanel() {
       <h3>Settings</h3>
       <div class="input-field">
         <label for="remoteDNS">Remote DNS (IP/Domain or IP/Domain,protocol):</label>
-        <textarea id="remoteDNS" placeholder="e.g., 8.8.8.8 (defaults to UDP) or dns.google,https">${settings.remoteDNS.join(',')}</textarea>
+        <textarea id="remoteDNS" placeholder="e.g., 8.8.8.8 (defaults to UDP) or dns.google,https"></textarea>
         <div class="error-message" id="remoteDNSError"></div>
       </div>
       <div class="input-field">
         <label for="directDNS">Direct DNS (IP/Domain or IP/Domain,protocol):</label>
-        <textarea id="directDNS" placeholder="e.g., 1.1.1.1 (defaults to UDP) or dns.google,tls">${settings.directDNS.join(',')}</textarea>
+        <textarea id="directDNS" placeholder="e.g., 1.1.1.1 (defaults to UDP) or dns.google,tls"></textarea>
         <div class="error-message" id="directDNSError"></div>
       </div>
       <div class="input-field">
         <label for="domains">Domains (domain or full URL):</label>
-        <textarea id="domains" placeholder="e.g., example.com or https://example.com">${settings.domains.join(',')}</textarea>
+        <textarea id="domains" placeholder="e.g., example.com or https://example.com"></textarea>
         <div class="error-message" id="domainsError"></div>
       </div>
       <div class="input-field">
         <label for="cleanIPs">Clean IPs (comma-separated):</label>
-        <textarea id="cleanIPs" placeholder="e.g., 192.168.1.1,192.168.1.2">${settings.cleanIPs.join(',')}</textarea>
+        <textarea id="cleanIPs" placeholder="e.g., 192.168.1.1,192.168.1.2"></textarea>
         <div class="error-message" id="cleanIPsError"></div>
       </div>
       <div class="input-field">
         <label for="snis">SNIs (comma-separated):</label>
-        <textarea id="snis" placeholder="e.g., sni1.example.com,sni2.example.com">${settings.snis.join(',')}</textarea>
+        <textarea id="snis" placeholder="e.g., sni1.example.com,sni2.example.com"></textarea>
         <div class="error-message" id="snisError"></div>
       </div>
       <div class="udp-tls-section">
-        <label><input type="checkbox" id="enableUDP" ${settings.enableUDP ? 'checked' : ''}> Enable UDP</label>
+        <label><input type="checkbox" id="enableUDP"> Enable UDP</label>
         <label>TLS Mode:
           <select id="tlsMode">
-            <option value="none" ${settings.tlsMode === 'none' ? 'selected' : ''}>None</option>
-            <option value="tls" ${settings.tlsMode === 'tls' ? 'selected' : ''}>TLS</option>
-            <option value="xtls" ${settings.tlsMode === 'xtls' ? 'selected' : ''}>XTLS</option>
+            <option value="none">None</option>
+            <option value="tls">TLS</option>
+            <option value="xtls">XTLS</option>
           </select>
         </label>
       </div>
@@ -1108,7 +1575,20 @@ function renderPanel() {
       <div class="port-card" onclick="selectPort('443')">443</div>
       <div class="port-card" onclick="selectPort('8080')">8080</div>
       <div class="port-card" onclick="selectPort('8443')">8443</div>
+      <div class="port-card" onclick="selectPort('2053')">2053</div>
+      <div class="port-card" onclick="selectPort('2087')">2087</div>
+      <div class="port-card" onclick="selectPort('2096')">2096</div>
+      <div class="port-card" onclick="selectPort('9443')">9443</div>
       <div class="port-card" onclick="selectPort('All Ports')">All Ports</div>
+    </div>
+
+    <div class="port-guide">
+      <p><strong>Port Selection Guide:</strong></p>
+      <p>✅ <strong>443</strong> - Best for most protocols (Recommended)</p>
+      <p>🚀 <strong>2053</strong> - Optimized for Hysteria (Default QUIC port)</p>
+      <p>🔧 <strong>8443</strong> - Good alternative for secondary services</p>
+      <p>⚠️ <strong>80/8080</strong> - For non-TLS connections</p>
+      <p>💡 <strong>Note:</strong> Selecting both 443 and 2053 gives best results for Hysteria</p>
     </div>
 
     <div class="protocol-selection">
@@ -1119,28 +1599,68 @@ function renderPanel() {
       <div class="protocol-card" onclick="selectProtocol('yaml')">YAML</div>
     </div>
 
-    <div class="fragment-card" id="fragmentCard" onclick="toggleFragment()">
-      Fragment
+    <div class="feature-cards">
+      <div class="feature-card" id="fragmentCard" onclick="toggleFeature('fragment')">
+        Fragment
+      </div>
+      <div class="feature-card" id="hysteriaCard" onclick="toggleFeature('hysteria')">
+        Hysteria
+      </div>
+      <div class="feature-card" id="tuicCard" onclick="toggleFeature('tuic')">
+        TUIC
+      </div>
     </div>
 
-    <div class="fragment-settings" id="fragmentSettings">
+    <div class="feature-settings" id="fragmentSettings">
       <div class="fragment-type">
         <label>
-          <input type="radio" name="fragmentType" id="v2rayFormat" ${!settings.fragment.clashMetaFormat ? 'checked' : ''}> 
+          <input type="radio" name="fragmentType" id="v2rayFormat"> 
           V2Ray/Hiddify Format
         </label>
         <label>
-          <input type="radio" name="fragmentType" id="clashMetaFormat" ${settings.fragment.clashMetaFormat ? 'checked' : ''}> 
+          <input type="radio" name="fragmentType" id="clashMetaFormat"> 
           Clash Meta Format
         </label>
       </div>
       <div class="input-field">
         <label for="fragmentSize">Fragment Size (bytes):</label>
-        <input type="number" id="fragmentSize" value="${settings.fragment.size}" min="500" max="2000">
+        <input type="number" id="fragmentSize" min="500" max="2000">
       </div>
       <div class="input-field">
         <label for="fragmentInterval">Fragment Interval (ms):</label>
-        <input type="number" id="fragmentInterval" value="${settings.fragment.interval}" min="50" max="300">
+        <input type="number" id="fragmentInterval" min="50" max="300">
+      </div>
+    </div>
+
+    <div class="feature-settings" id="hysteriaSettings">
+      <div class="input-field">
+        <label for="hysteriaProtocol">Protocol:</label>
+        <select id="hysteriaProtocol">
+          <option value="udp">UDP</option>
+          <option value="tcp">TCP</option>
+        </select>
+      </div>
+      <div class="input-field">
+        <label for="hysteriaAuth">Authentication:</label>
+        <input type="text" id="hysteriaAuth" placeholder="Optional authentication string">
+      </div>
+      <div class="input-field">
+        <label for="hysteriaObfs">Obfuscation:</label>
+        <input type="text" id="hysteriaObfs" placeholder="Optional obfuscation string">
+      </div>
+    </div>
+
+    <div class="feature-settings" id="tuicSettings">
+      <div class="input-field">
+        <label for="tuicCongestionControl">Congestion Control:</label>
+        <select id="tuicCongestionControl">
+          <option value="bbr">BBR</option>
+          <option value="cubic">CUBIC</option>
+        </select>
+      </div>
+      <div class="input-field">
+        <label for="tuicAlpn">ALPN Protocols (comma-separated):</label>
+        <input type="text" id="tuicAlpn" placeholder="e.g., h3,h2">
       </div>
     </div>
 
@@ -1148,7 +1668,6 @@ function renderPanel() {
     <div id="copyMessage" class="copy-message"></div>
   </div>
 
-  <!-- Wizard Panel -->
   <div class="container" id="wizardPanel" style="display: none;">
     <div class="wizard-container">
       <div class="wizard-header">
@@ -1159,7 +1678,6 @@ function renderPanel() {
         <div class="wizard-progress-bar" id="wizardProgressBar"></div>
       </div>
       
-      <!-- Step 1: Goal Selection -->
       <div class="wizard-step active" id="step1">
         <h3>What is your main goal?</h3>
         <div class="wizard-option" onclick="selectGoal('🚀 Speed')">
@@ -1176,7 +1694,6 @@ function renderPanel() {
         </div>
       </div>
       
-      <!-- Step 2: Recommendation -->
       <div class="wizard-step" id="step2">
         <h3>Recommended Configuration</h3>
         <div class="wizard-recommendation" id="wizardRecommendation">
@@ -1188,7 +1705,6 @@ function renderPanel() {
         </div>
       </div>
       
-      <!-- Step 3: Apply Settings -->
       <div class="wizard-step" id="step3">
         <h3>Ready to Apply</h3>
         <p>Review the recommended settings and choose an action:</p>
@@ -1205,8 +1721,7 @@ function renderPanel() {
     </div>
   </div>
 </body>
-</html>
-  `;
+</html>`;
 }
 
 function validateSettings(body) {
@@ -1272,6 +1787,27 @@ function validateSettings(body) {
     }
   }
 
+  if (body.hysteria) {
+    if (body.hysteria.protocol && !['udp', 'tcp'].includes(body.hysteria.protocol)) {
+      errors.push('Invalid Hysteria protocol. Must be "udp" or "tcp".');
+    }
+    if (body.hysteria.auth && body.hysteria.auth.length > 255) {
+      errors.push('Hysteria auth string too long (max 255 chars).');
+    }
+    if (body.hysteria.obfs && body.hysteria.obfs.length > 255) {
+      errors.push('Hysteria obfs string too long (max 255 chars).');
+    }
+  }
+
+  if (body.tuic) {
+    if (body.tuic.congestionControl && !['bbr', 'cubic'].includes(body.tuic.congestionControl)) {
+      errors.push('Invalid TUIC congestion control. Must be "bbr" or "cubic".');
+    }
+    if (body.tuic.alpn && !Array.isArray(body.tuic.alpn)) {
+      errors.push('TUIC ALPN must be an array.');
+    }
+  }
+
   return errors;
 }
 
@@ -1313,14 +1849,13 @@ async function fetchConfigs(urls, remoteDNS, directDNS) {
     vless: [],
     shadowsocks: [],
     trojan: [],
-    yaml: []
+    tuic: [],    
+    hysteria: [] 
   };
 
   await Promise.all(urls.map(async (url) => {
     try {
-      if (!isValidDomain(url)) {
-        return;
-      }
+      if (!isValidDomain(url)) return;
 
       if (configCache.has(url)) {
         processConfig(url, configCache.get(url), allConfigs, remoteDNS, directDNS);
@@ -1328,77 +1863,17 @@ async function fetchConfigs(urls, remoteDNS, directDNS) {
       }
 
       const response = await fetch(url, { rejectUnauthorized: true });
-      if (!response.ok) {
-        return;
-      }
+      if (!response.ok) return;
 
       const text = await response.text();
       configCache.set(url, text);
       processConfig(url, text, allConfigs, remoteDNS, directDNS);
     } catch (error) {
+      console.error(`Error processing ${url}:`, error);
     }
   }));
 
   return allConfigs;
-}
-
-function processConfig(url, text, allConfigs, remoteDNS, directDNS) {
-  if (url.endsWith('.yaml') || url.endsWith('.yml')) {
-    allConfigs.yaml.push(text.trim());
-  } else if (url.endsWith('.txt')) {
-    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
-    const usedAddresses = new Set();
-
-    lines.forEach(line => {
-      let port, address;
-
-      if (line.startsWith('vmess://')) {
-        const match = line.match(/port["']?\s*[:=]\s*["']?(\d+)/);
-        if (match) {
-          port = match[1];
-          address = line.match(/add["']?\s*[:=]\s*["']?([^"']+)/)?.[1];
-          const serverKey = `${address}:${port}`;
-          if (!usedAddresses.has(serverKey)) {
-            usedAddresses.add(serverKey);
-            allConfigs.vmess.push(processVmess(line, settings));
-          }
-        }
-      } else if (line.startsWith('vless://')) {
-        const match = line.match(/@([^:]+):(\d+)/);
-        if (match) {
-          address = match[1];
-          port = match[2];
-          const serverKey = `${address}:${port}`;
-          if (!usedAddresses.has(serverKey)) {
-            usedAddresses.add(serverKey);
-            allConfigs.vless.push(processVless(line, settings));
-          }
-        }
-      } else if (line.startsWith('ss://')) {
-        const match = line.match(/@([^:]+):(\d+)/);
-        if (match) {
-          address = match[1];
-          port = match[2];
-          const serverKey = `${address}:${port}`;
-          if (!usedAddresses.has(serverKey)) {
-            usedAddresses.add(serverKey);
-            allConfigs.shadowsocks.push(processShadowsocks(line, settings));
-          }
-        }
-      } else if (line.startsWith('trojan://')) {
-        const match = line.match(/@([^:]+):(\d+)/);
-        if (match) {
-          address = match[1];
-          port = match[2];
-          const serverKey = `${address}:${port}`;
-          if (!usedAddresses.has(serverKey)) {
-            usedAddresses.add(serverKey);
-            allConfigs.trojan.push(processTrojan(line, settings));
-          }
-        }
-      }
-    });
-  }
 }
 
 function processVmess(link, settings) {
@@ -1498,6 +1973,43 @@ function processTrojan(link, settings) {
   }
 }
 
+function processTuic(link, settings) {
+  try {
+    const url = new URL(link);
+    if (settings.cleanIPs.length > 0) url.hostname = settings.cleanIPs.shift();
+    if (settings.snis.length > 0) url.searchParams.set('sni', settings.snis.shift());
+    if (settings.enableUDP) url.searchParams.set('udp_relay_mode', 'native');
+    if (settings.tlsMode === 'tls') url.searchParams.set('allow_insecure', 'false');
+    else url.searchParams.set('allow_insecure', 'true');
+    if (settings.tuic.enabled) {
+      url.searchParams.set('congestion_control', settings.tuic.congestionControl);
+      url.searchParams.set('alpn', settings.tuic.alpn.join(','));
+    }
+    return url.toString();
+  } catch (e) {
+    return link;
+  }
+}
+
+function processHysteria(link, settings) {
+  try {
+    const url = new URL(link);
+    if (settings.cleanIPs.length > 0) url.hostname = settings.cleanIPs.shift();
+    if (settings.snis.length > 0) url.searchParams.set('sni', settings.snis.shift());
+    if (settings.enableUDP) url.searchParams.set('protocol', 'udp');
+    else url.searchParams.set('protocol', 'tcp');
+    if (settings.tlsMode === 'tls') url.searchParams.set('insecure', '0');
+    else url.searchParams.set('insecure', '1');
+    if (settings.hysteria.enabled) {
+      if (settings.hysteria.auth) url.searchParams.set('auth', settings.hysteria.auth);
+      if (settings.hysteria.obfs) url.searchParams.set('obfs', settings.hysteria.obfs);
+    }
+    return url.toString();
+  } catch (e) {
+    return link;
+  }
+}
+
 function categorizeConfigs(rawConfigs, protocol, ports, settings, fragmentEnabled, fragmentSize, fragmentInterval) {
   const isClashMeta = settings.fragment?.clashMetaFormat || false;
   let response = '';
@@ -1559,6 +2071,14 @@ function categorizeConfigs(rawConfigs, protocol, ports, settings, fragmentEnable
       if (protocolList.includes('trojan')) {
         const trojanConfigs = filterByPort(rawConfigs.trojan);
         response += trojanConfigs.length > 0 ? trojanConfigs.join('\n') + '\n\n' : 'Trojan Configs: None\n\n';
+      }
+      if (protocolList.includes('tuic')) {
+        const tuicConfigs = filterByPort(rawConfigs.tuic);
+        response += tuicConfigs.length > 0 ? tuicConfigs.join('\n') + '\n\n' : 'TUIC Configs: None\n\n';
+      }
+      if (protocolList.includes('hysteria')) {
+        const hysteriaConfigs = filterByPort(rawConfigs.hysteria);
+        response += hysteriaConfigs.length > 0 ? hysteriaConfigs.join('\n') + '\n\n' : 'Hysteria Configs: None\n\n';
       }
     }
   }
@@ -1729,6 +2249,10 @@ function isValidProxy(proxy) {
       return !!proxy.cipher && !!proxy.password;
     case 'vless':
       return !!proxy.uuid;
+    case 'tuic':
+      return !!proxy.uuid && !!proxy.password;
+    case 'hysteria':
+      return !!proxy.server && !!proxy.port;
     default:
       return true;
   }
@@ -1751,19 +2275,20 @@ async function generateClashConfig(ports, protocol, settings) {
 
   try {
     const rawConfigs = await fetchConfigs(urls, settings.remoteDNS, settings.directDNS);
-    if (rawConfigs.yaml.length === 0) {
-      return 'proxies: []';
-    }
-
+    
+    const protocolList = protocol.split(',').map(p => p.toLowerCase().trim())
+                               .filter(p => p !== 'yaml');
+    
     let finalConfigs = rawConfigs.yaml.map(config => {
       const parsed = validateAndParseYaml(config);
-      if (!parsed || !parsed.proxies) return config;
+      if (!parsed || !parsed.proxies) return null;
 
-      const protocolList = protocol ? protocol.split(',').map(p => p.toLowerCase()) : settings.selectedProtocols;
-      parsed.proxies = parsed.proxies.filter(proxy =>
-        protocolList.includes(proxy.type.toLowerCase())
-      );
-
+      if (protocolList.length > 0) {
+        parsed.proxies = parsed.proxies.filter(proxy => 
+          proxy.type && protocolList.includes(proxy.type.toLowerCase())
+        );
+      }
+      
       return jsYaml.dump(parsed);
     }).filter(Boolean).join('\n---\n');
 
@@ -1773,21 +2298,50 @@ async function generateClashConfig(ports, protocol, settings) {
 
     finalConfigs = applyUserSettingsToYaml([finalConfigs], settings);
     return finalConfigs || 'proxies: []';
+
   } catch (error) {
+    console.error('Error in generateClashConfig:', error);
     return 'proxies: []';
   }
 }
 
 async function generateV2rayConfig(protocol, ports, settings) {
   const rawConfigs = await fetchConfigs([
-    'https://raw.githubusercontent.com/Epodonios/v2ray-configs/refs/heads/main/Splitted-By-Protocol/vmess.txt',
-    'https://raw.githubusercontent.com/Epodonios/v2ray-configs/refs/heads/main/Config%20list10.txt',
-    'https://raw.githubusercontent.com/Epodonios/v2ray-configs/refs/heads/main/Config%20list1.txt',
-    'https://raw.githubusercontent.com/Epodonios/v2ray-configs/refs/heads/main/Config%20list11.txt',
-    'https://raw.githubusercontent.com/Epodonios/v2ray-configs/refs/heads/main/Config%20list2.txt'
+         "https://zaya.link/Arista_HP_Final",
+          "https://raw.githubusercontent.com/ahsan-tepo1383/kv98/refs/heads/main/final.txt",
+        "https://raw.githubusercontent.com/almasi98/omax98/refs/heads/main/final.txt",
+        "https://raw.githubusercontent.com/tepo18/tepo90/refs/heads/main/final.txt",
+        "https://raw.githubusercontent.com/tepo18/sab-vip10/refs/heads/main/final1.txt",
+        "https://raw.githubusercontent.com/tepo18/reza-shah1320/refs/heads/main/final.txt",
+        "https://raw.githubusercontent.com/tepo18/online-sshmax98/refs/heads/main/final.txt",
+        "https://raw.githubusercontent.com/tepo18/sab-vip10/refs/heads/main/final.txt",
+  "https://raw.githubusercontent.com/tepo18/sab-vip10/refs/heads/main/final.json",
+               "https://raw.githubusercontent.com/Kolandone/v2raycollector/main/trojan.txt",
+"https://raw.githubusercontent.com/Kolandone/v2raycollector/main/ss.txt",
+"https://raw.githubusercontent.com/Kolandone/v2raycollector/main/vless.txt",
+"https://raw.githubusercontent.com/Kolandone/v2raycollector/main/vless.txt",
+"https://raw.githubusercontent.com/Kolandone/v2raycollector/main/config_lite.txt",
+"https://raw.githubusercontent.com/Surfboardv2ray/Proxy-sorter/refs/heads/main/output/converted.txt",
+"https://raw.githubusercontent.com/Surfboardv2ray/Proxy-sorter/refs/heads/main/custom/udp.txt",
+"https://raw.githubusercontent.com/Surfboardv2ray/TGParse/refs/heads/main/configtg.txt",
+   "https://zaya.link/Arista_HP_Final",
+"https://raw.githubusercontent.com/yebekhe/vpn-fail/refs/heads/main/sub-link.txt", 
+      'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista1.txt',
+    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista2.txt',
+    'https://raw.githubusercontent.com/Aristaproject/AristaSub/refs/heads/main/Arista3.txt',
+    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista4.txt',
+      'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista5.txt',
+    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista6.txt',
+    'https://raw.githubusercontent.com/Aristaproject/AristaSub/refs/heads/main/Arista7.txt',
+    'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista8.txt',
+       'https://github.com/Aristaproject/AristaSub/raw/refs/heads/main/Arista9.txt',
+      'https://raw.githubusercontent.com/NiREvil/vless/main/sub/clash-meta.yml',
+      'https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml',
+      'https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/Eternity.yml',
+ 
   ], settings.remoteDNS, settings.directDNS);
 
-  let configContent = '';
+  let configContent = rawConfigs.conversionLog || '';
   const protocolList = protocol.split(',').map(p => p.toLowerCase());
   const portList = ports.split(',');
 
@@ -1802,16 +2356,22 @@ async function generateV2rayConfig(protocol, ports, settings) {
   };
 
   if (protocolList.includes('vmess')) {
-    configContent += filterByPort(rawConfigs.vmess.map(link => processVmess(link, settings))).join('\n') + '\n';
+    configContent += filterByPort(rawConfigs.vmess).join('\n') + '\n';
   }
   if (protocolList.includes('vless')) {
-    configContent += filterByPort(rawConfigs.vless.map(link => processVless(link, settings))).join('\n') + '\n';
+    configContent += filterByPort(rawConfigs.vless).join('\n') + '\n';
   }
   if (protocolList.includes('shadowsocks')) {
-    configContent += filterByPort(rawConfigs.shadowsocks.map(link => processShadowsocks(link, settings))).join('\n') + '\n';
+    configContent += filterByPort(rawConfigs.shadowsocks).join('\n') + '\n';
   }
   if (protocolList.includes('trojan')) {
-    configContent += filterByPort(rawConfigs.trojan.map(link => processTrojan(link, settings))).join('\n') + '\n';
+    configContent += filterByPort(rawConfigs.trojan).join('\n') + '\n';
+  }
+  if (protocolList.includes('tuic')) {
+    configContent += filterByPort(rawConfigs.tuic).join('\n') + '\n';
+  }
+  if (protocolList.includes('hysteria')) {
+    configContent += filterByPort(rawConfigs.hysteria).join('\n') + '\n';
   }
 
   return configContent.trim();
